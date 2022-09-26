@@ -9,5 +9,6 @@
   },
   "devDependencies": {
     "nuxt": "3.0.0-rc.11"
-  }
+  },
+  "packageManager": "yarn@3.2.3"
 }
