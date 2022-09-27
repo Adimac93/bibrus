@@ -1,5 +1,7 @@
 use axum::{response::Html, routing::get, Router};
 use std::net::SocketAddr;
+mod auth;
+use auth::Users;
 
 #[tokio::main]
 async fn main() {
