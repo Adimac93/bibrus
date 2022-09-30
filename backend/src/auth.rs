@@ -13,7 +13,7 @@ struct User {
     password: String,
 }
 
-enum Error {
+pub enum Error {
     UserAlreadyExists,
     UserNotFound,
 }
