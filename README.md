@@ -19,7 +19,7 @@ Breaking changes have to be tested!
 ### Categories
   - fix - fixing unwanted behaviour
   - perf - performance, optimization
-  - doc - document, documentation
+  - docs - document, documentation
   - feat - feature
   - refactor - changing structure but not functionality
   - format - only text, visual changes
