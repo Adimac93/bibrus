@@ -25,7 +25,7 @@ impl Users {
 
     pub fn add_user(&mut self, name: String, pass: String) -> Result<(), Error> {
         if !self.user_exists(name.as_str()) {
-            Ok(self.users.push(User::new(name, hash_pass(pass.as_bytes()))))
+            Ok(self.users.push(User::new(name, pass)))
         } else { Err(Error::UserAlreadyExists) }
     }
 
@@ -74,7 +74,7 @@ impl Users {
 
 impl User {
     fn new(username: String, password: String) -> Self {
-        Self{ username, password }
+        Self{ username, password: hash_pass(password.as_bytes()) }
     }
 }
 
