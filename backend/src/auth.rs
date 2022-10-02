@@ -2,12 +2,12 @@
 use rand::{Rng, thread_rng};
 use rand::distributions::Alphanumeric;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Users {
     users: Vec<User>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct User {
     username: String,
     password: String,
@@ -24,6 +24,7 @@ impl Users {
     }
 
     pub fn add_user(&mut self, name: String, pass: String) -> Result<(), Error> {
+        println!("{:?}", self);
         if !self.user_exists(name.as_str()) {
             Ok(self.users.push(User::new(name, pass)))
         } else { Err(Error::UserAlreadyExists) }
