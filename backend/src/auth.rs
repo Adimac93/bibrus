@@ -1,16 +1,28 @@
 ﻿use argon2;
 use rand::{Rng, thread_rng};
 use rand::distributions::Alphanumeric;
+use serde::Deserialize;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Users {
     users: Vec<User>,
 }
 
-#[derive(Debug, Clone)]
-struct User {
-    username: String,
-    password: String,
+#[derive(Debug, Deserialize)]
+pub struct User {
+    pub username: String,
+    pub password: String,
+}
+
+#[derive(Deserialize)]
+pub struct UserName {
+    pub username: String,
+}
+
+#[derive(Deserialize)]
+pub struct UserNameChange {
+    pub username: String,
+    pub new_username: String,
 }
 
 pub enum Error {
@@ -24,13 +36,13 @@ impl Users {
     }
 
     pub fn add_user(&mut self, name: String, pass: String) -> Result<(), Error> {
-        println!("{:?}", self);
         if !self.user_exists(name.as_str()) {
             Ok(self.users.push(User::new(name, pass)))
         } else { Err(Error::UserAlreadyExists) }
     }
 
     pub fn remove_user(&mut self, name: String) -> Result<(), Error> {
+        println!("remove: the struct is: {:?}", self);
         for i in 0..self.users.len() {
             if self.users[i].username == name {
                 self.users.remove(i);
@@ -41,6 +53,7 @@ impl Users {
     }
 
     pub fn change_name(&mut self, name: String, new_name: String) -> Result<(), Error> {
+        println!("change_name: the struct is: {:?}", self);
         if self.user_exists(new_name.as_str()) { return Err(Error::UserAlreadyExists) }
         for i in 0..self.users.len() {
             if self.users[i].username == name {
