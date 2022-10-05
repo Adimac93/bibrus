@@ -10,17 +10,18 @@ type UsersState = Arc<RwLock<auth::Users>>;
 async fn main() {
     let users_state = Arc::new(RwLock::new(auth::Users::new()));
     // build our application with a route
+
+    let auth_routes = Router::new()
+    .route("/register", post(register_user))
+    .route("/remove", post(delete_account))
+    .route("/change-name", post(change_username))
+    .route("/change-pass", post(change_password));
+
     let app = Router::new()
     .route("/", get(handler))
-    .route("/api/auth/register", post(register_user))
-        .layer(AddExtensionLayer::new(Arc::clone(&users_state)))
-    .route("/api/auth/remove", post(delete_account))
-        .layer(AddExtensionLayer::new(Arc::clone(&users_state)))
-    .route("/api/auth/change-name", post(change_username))
-        .layer(AddExtensionLayer::new(Arc::clone(&users_state)))
-    .route("/api/auth/change-pass", post(change_password))
-        .layer(AddExtensionLayer::new(Arc::clone(&users_state)));
-
+    .nest("/api/auth", auth_routes)
+    .layer(AddExtensionLayer::new(Arc::clone(&users_state)));
+    
     // run it
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
     println!("listening on {}", addr);
