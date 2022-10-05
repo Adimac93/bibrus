@@ -6,9 +6,12 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-axum = "0.5.16"
+axum = { version = "0.5.16", features = ["macros"] }
+axum-extra = { version = "0.3.7", features = ["cookie", "cookie-signed"] }
 tokio = { version = "1.21.1", features = ["full"] }
 rust-argon2 = "1.0.0"
 rand = "0.8.5"
 serde = { version = "1.0.145", features = ["derive"] }
 tower-http = { version = "0.2.0", features = ["add-extension"] }
+time = "0.3.15"
+uuid = { verison = "1.1.2", features = ["v4"] }
