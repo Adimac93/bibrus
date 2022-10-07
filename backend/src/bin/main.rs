@@ -1,5 +1,5 @@
 use axum::{response::Html, routing::get, Extension, Router};
-use backend::database::{db_test, get_connection_pool};
+use backend::database::{ get_connection_pool};
 use std::net::SocketAddr;
 
 #[tokio::main]
@@ -7,7 +7,6 @@ async fn main() {
     // build our application with a route
     let app = Router::new()
         .route("/", get(handler))
-        .route("/test/db", get(db_test))
         .layer(Extension(get_connection_pool()));
 
     // run it
