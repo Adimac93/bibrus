@@ -59,7 +59,9 @@ async fn register_user(
         .add_user(payload.username, payload.password)
     {
         Ok(_) => Html("Successful registration"),
-        Err(_) => Html("User already exists"),
+        Err(auth::Error::UserAlreadyExists) => Html("User already exists"),
+        Err(auth::Error::WeakPassword) => Html("Weak password"),
+        _ => unreachable!(),
     }
 }
 
@@ -82,7 +84,7 @@ async fn change_username(
         .unwrap()
         .change_name(payload.username, payload.new_username)
     {
-        Ok(_) => Html("Change username"),
+        Ok(_) => Html("Username changed"),
         Err(_) => Html("User not found"),
     }
 }
@@ -96,8 +98,10 @@ async fn change_password(
         .unwrap()
         .change_pass(payload.username, payload.password)
     {
-        Ok(_) => Html("Change password"),
-        Err(_) => Html("User not found"),
+        Ok(_) => Html("Password changed"),
+        Err(auth::Error::UserAlreadyExists) => Html("User already exists"),
+        Err(auth::Error::WeakPassword) => Html("Weak password"),
+        _ => unreachable!(),
     }
 }
 
