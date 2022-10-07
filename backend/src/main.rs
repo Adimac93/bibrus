@@ -9,8 +9,6 @@ use axum_extra::extract::cookie::{Cookie, Key, SignedCookieJar};
 use backend::auth;
 use std::net::SocketAddr;
 use std::sync::{Arc, RwLock};
-use time::{Duration, OffsetDateTime};
-use tower_http::add_extension::AddExtensionLayer;
 use uuid::Uuid;
 
 type UsersState = Arc<RwLock<auth::Users>>;
@@ -35,8 +33,8 @@ async fn main() {
     let app = Router::new()
         .route("/", get(handler))
         .nest("/api/auth", auth_routes)
-        .layer(AddExtensionLayer::new(Arc::clone(&sessions)))
-        .layer(AddExtensionLayer::new(Arc::clone(&users_state)));
+        .layer(Extension(Arc::clone(&sessions)))
+        .layer(Extension(Arc::clone(&users_state)));
 
     // run it
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
@@ -61,7 +59,7 @@ async fn register_user(
         .add_user(payload.username, payload.password)
     {
         Ok(_) => Html("Successful registration"),
-        Err(_) => Html("You're a Failure."),
+        Err(_) => Html("User already exists"),
     }
 }
 
@@ -112,7 +110,7 @@ async fn create_session(
     if let Some(session_id) =
         authorize_and_create_session(&payload.username, &payload.password, users_storage).await
     {
-        &session_storage.write().unwrap().sessions.insert(session_id.clone(), payload.username);
+        let _ = &session_storage.write().unwrap().sessions.insert(session_id.clone(), payload.username);
         Ok(jar.add(Cookie::new("session_id", session_id)))
     } else {
         Err(StatusCode::UNAUTHORIZED)
@@ -121,13 +119,11 @@ async fn create_session(
 
 async fn me(jar: SignedCookieJar, Extension(session_storage): Extension<SessionState>) -> Result<(), StatusCode> {
     if let Some(session_id) = jar.get("session_id") {
-        match &session_storage.read().unwrap().sessions.get(session_id.value()) {
-            Some(user) => Ok(()),
-            None => Err(StatusCode::UNAUTHORIZED),
+        if let Some(_) = &session_storage.read().unwrap().sessions.get(session_id.value()) {
+            return Ok(())
         }
-    } else {
-        Err(StatusCode::UNAUTHORIZED)
     }
+    Err(StatusCode::UNAUTHORIZED)
 }
 
 async fn authorize_and_create_session(
