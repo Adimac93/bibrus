@@ -35,16 +35,18 @@
 --     RETURN NEW;
 -- END;
 -- $$ LANGUAGE plpgsql;
-create table users
+
+create table schools
 (
-    id   serial,
-    name varchar(100) not null,
-    age  int          not null
+    id uuid primary key null unique default gen_random_uuid(),
+    name varchar not null
 );
 
-create unique index users_id_uindex
-    on users (id);
-
-alter table users
-    add constraint users_pk
-        primary key (id);
+create table users
+(
+    id uuid default gen_random_uuid() primary key,
+    login varchar not null unique,
+    password varchar not null,
+    schoolID uuid,
+    foreign key (schoolID) references schools(id)
+);

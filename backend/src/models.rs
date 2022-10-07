@@ -1,17 +1,30 @@
-use diesel::prelude::*;
+use diesel::{prelude::*};
+use crate::schema::{users,schools};
 
-use crate::schema::users;
-
-#[derive(Queryable, PartialEq, Debug)]
+#[derive(Queryable, Debug)]
 pub struct User {
-    id: i32,
-    name: String,
-    age: i32,
+    pub id: uuid::Uuid,
+    pub login: String,
+    pub password: String,
+    pub schoolid: Option<uuid::Uuid>
 }
 
-#[derive(Insertable, Debug)]
+#[derive(Insertable)]
 #[diesel(table_name = users)]
-pub struct NewUser<'a> {
-    pub name: &'a str,
-    pub age: &'a i32,
+pub struct NewUser<'a>{
+    pub login: &'a str,
+    pub password: &'a str,
+    pub schoolid: Option<uuid::Uuid>
+}
+
+#[derive(Queryable,Debug)]
+pub struct School{
+    pub id: uuid::Uuid,
+    pub name: String
+}
+
+#[derive(Insertable)]
+#[diesel(table_name = schools)]
+pub struct NewSchool<'a>{
+   pub  name: &'a str
 }
