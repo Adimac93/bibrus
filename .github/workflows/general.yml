@@ -1,4 +1,4 @@
-name: Rust
+name: Backend
 
 on: 
   push:
@@ -20,13 +20,13 @@ jobs:
     name: Test
     runs-on: ubuntu-latest
     steps:
+      - run: cd backend
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
         with:
           profile: minimal
           toolchain: stable
           override: true
-      - run: cd backend
       - uses: actions-rs/cargo@v1
         with:
           command: test
@@ -35,13 +35,13 @@ jobs:
     name: Rustfmt
     runs-on: ubuntu-latest
     steps:
+      - run: cd backend
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
           override: true
           components: rustfmt
-      - run: cd backend
       - uses: actions-rs/cargo@v1
         with:
           command: fmt
@@ -51,13 +51,13 @@ jobs:
     name: Clippy
     runs-on: ubuntu-latest
     steps:
+      - run: cd backend
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
           override: true
           components: clippy
-      - run: cd backend
       - uses: actions-rs/clippy-check@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -67,6 +67,7 @@ jobs:
     name: Code coverage
     runs-on: ubuntu-latest
     steps:
+      - run: cd backend
       - name: Checkout repository
         uses: actions/checkout@v2
       - name: Install stable toolchain
@@ -74,7 +75,6 @@ jobs:
         with:
           toolchain: stable
           override: true
-      - run: cd backend
       - name: Run cargo-tarpaulin
         uses: actions-rs/tarpaulin@v0.1
         with:
