@@ -24,7 +24,7 @@ Breaking changes have to be tested!
   - refactor - changing structure but not functionality
   - format - only text, visual changes
   - init - only for initialization purposes
-
+  - test - testing something or adding tests
 ## Environment
 
 Currently we are using [Doppler](https://www.doppler.com) to keep our secrets and app configuration in sync and secure across devices.
