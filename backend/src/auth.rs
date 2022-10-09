@@ -5,7 +5,7 @@ use crate::{
     models::{NewSession, NewUser, Session, User},
     schema,
 };
-use diesel::{delete, insert_into, update};
+use diesel::{delete, insert_into};
 use diesel::{
     prelude::*,
     r2d2::{ConnectionManager, PooledConnection},
