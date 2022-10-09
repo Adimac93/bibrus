@@ -1,41 +1,43 @@
-use backend::database::{get_connection_pool};
 use axum::{
     debug_handler, extract,
-    http::StatusCode,
+    http::{Request, StatusCode},
+    middleware::{self, Next},
     response::{Html, Json},
     routing::{get, post},
     Extension, Router,
 };
-use axum_extra::extract::cookie::{Cookie, Key, SignedCookieJar};
-use backend::auth;
-use std::net::SocketAddr;
-use std::sync::{Arc, RwLock};
+use axum_extra::extract::{
+    cookie::{Cookie, Key, SignedCookieJar},
+    CookieJar,
+};
+use backend::{
+    auth::{create_session, login_user, try_create_new_user, try_get_session},
+    database::{get_connection_pool, PgPool},
+};
+use dotenv::dotenv;
+use serde::Deserialize;
+use std::{net::SocketAddr, str::FromStr};
+use time::Duration;
 use uuid::Uuid;
-
-type UsersState = Arc<RwLock<auth::Users>>;
-type SessionState = Arc<RwLock<auth::SessionStorage>>;
 
 #[tokio::main]
 async fn main() {
-    let users_state = Arc::new(RwLock::new(auth::Users::new()));
-    let sessions: SessionState = Arc::new(RwLock::new(auth::SessionStorage::default()));
+    // load env variables from .env file
+    dotenv().ok();
+
     let key = Key::generate();
     // build our application with a route
 
     let auth_routes = Router::new()
-        .route("/register", post(register_user))
-        .route("/remove", post(delete_account))
-        .route("/change-name", post(change_username))
-        .route("/change-pass", post(change_password))
-        .route("/sessions", post(create_session))
-        .route("/me", post(me))
+        .route("/register", post(POST_register_user))
+        .route("/login", post(POST_login_user))
         .layer(Extension(key));
 
     let app = Router::new()
         .route("/", get(handler))
+        .layer(middleware::from_fn(auth_middleware))
         .nest("/api/auth", auth_routes)
-        .layer(Extension(Arc::clone(&sessions)))
-        .layer(Extension(Arc::clone(&users_state)));
+        .layer(Extension(get_connection_pool()));
 
     // run it
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
@@ -50,94 +52,74 @@ async fn handler() -> Html<&'static str> {
     Html("<h1>Hello, World!</h1>")
 }
 
-async fn register_user(
-    extract::Json(payload): extract::Json<auth::User>,
-    Extension(users_storage): Extension<UsersState>,
+#[derive(Deserialize)]
+struct AuthUser {
+    login: String,
+    password: String,
+}
+
+async fn POST_register_user(
+    extract::Json(payload): extract::Json<AuthUser>,
+    pool: Extension<PgPool>,
 ) -> Html<&'static str> {
-    match &users_storage
-        .write()
-        .unwrap()
-        .add_user(payload.username, payload.password)
-    {
-        Ok(_) => Html("Successful registration"),
-        Err(auth::Error::UserAlreadyExists) => Html("User already exists"),
-        Err(auth::Error::WeakPassword) => Html("Weak password"),
-        _ => unreachable!(),
+    let mut conn = pool.get().unwrap();
+
+    match try_create_new_user(&mut conn, &payload.login, &payload.password) {
+        Ok(_) => Html("<h1>Registered</h1>"),
+        Err(e) => Html("<h1>Failed to register</h1>"),
     }
 }
 
-async fn delete_account(
-    extract::Json(payload): extract::Json<auth::UserName>,
-    Extension(users_storage): Extension<UsersState>,
-) -> Html<&'static str> {
-    match &users_storage.write().unwrap().remove_user(payload.username) {
-        Ok(_) => Html("Removed user"),
-        Err(_) => Html("User not found"),
-    }
-}
-
-async fn change_username(
-    extract::Json(payload): extract::Json<auth::UserNameChange>,
-    Extension(users_storage): Extension<UsersState>,
-) -> Html<&'static str> {
-    match &users_storage
-        .write()
-        .unwrap()
-        .change_name(payload.username, payload.new_username)
-    {
-        Ok(_) => Html("Username changed"),
-        Err(_) => Html("User not found"),
-    }
-}
-
-async fn change_password(
-    extract::Json(payload): extract::Json<auth::User>,
-    Extension(users_storage): Extension<UsersState>,
-) -> Html<&'static str> {
-    match &users_storage
-        .write()
-        .unwrap()
-        .change_pass(payload.username, payload.password)
-    {
-        Ok(_) => Html("Password changed"),
-        Err(auth::Error::UserAlreadyExists) => Html("User already exists"),
-        Err(auth::Error::WeakPassword) => Html("Weak password"),
-        _ => unreachable!(),
-    }
-}
-
-async fn create_session(
-    Json(payload): Json<auth::User>,
-    jar: SignedCookieJar,
-    Extension(users_storage): Extension<UsersState>,
-    Extension(session_storage): Extension<SessionState>,
-) -> Result<SignedCookieJar, StatusCode> {
-    if let Some(session_id) =
-        authorize_and_create_session(&payload.username, &payload.password, users_storage).await
-    {
-        let _ = &session_storage.write().unwrap().sessions.insert(session_id.clone(), payload.username);
-        Ok(jar.add(Cookie::new("session_id", session_id)))
-    } else {
-        Err(StatusCode::UNAUTHORIZED)
-    }
-}
-
-async fn me(jar: SignedCookieJar, Extension(session_storage): Extension<SessionState>) -> Result<(), StatusCode> {
-    if let Some(session_id) = jar.get("session_id") {
-        if let Some(_) = &session_storage.read().unwrap().sessions.get(session_id.value()) {
-            return Ok(())
+async fn POST_login_user(
+    extract::Json(payload): extract::Json<AuthUser>,
+    pool: Extension<PgPool>,
+    jar: CookieJar,
+) -> Result<(CookieJar, Html<&'static str>), StatusCode> {
+    let mut conn = pool.get().unwrap();
+    match login_user(&mut conn, payload.login, payload.password) {
+        Ok(user_id) => {
+            Html("<h1>Logged in</h1>");
+            let session_id = create_session(&mut conn, user_id);
+            let cookie = Cookie::build("session_id", session_id.to_string())
+                .path("/")
+                .http_only(true)
+                .secure(false)
+                .max_age(Duration::minutes(10))
+                .finish();
+            Ok((jar.add(cookie), Html("<h1>Logged in</h1>")))
         }
+        Err(e) => Err(StatusCode::UNAUTHORIZED),
     }
-    Err(StatusCode::UNAUTHORIZED)
 }
 
-async fn authorize_and_create_session(
-    user: &str,
-    pass: &str,
-    users_storage: UsersState,
-) -> Option<String> {
-    match &users_storage.write().unwrap().verify(user, pass) {
-        true => Some(Uuid::new_v4().to_string()),
-        false => None,
+async fn auth_middleware<B>(req: Request<B>, res: Next<B>) -> Html<&'static str> {
+    let pool = req.extensions().get::<PgPool>().unwrap();
+    let cookie_header = req.headers().get("cookie");
+    let session_cookie = match cookie_header {
+        Some(header) => Ok(Cookie::parse(header.to_str().unwrap()).unwrap()),
+        None => {
+            println!("Invalid session");
+            Err(())
+        }
+    };
+
+    match session_cookie {
+        Ok(cookie) => {
+            let session_id = Uuid::from_str(cookie.value());
+            match session_id {
+                Ok(id) => {
+                    let mut conn = pool.get().unwrap();
+                    match try_get_session(&mut conn, id) {
+                        Ok(user) => {
+                            println!("{user:#?}");
+                            return Html("<h1>Session ok</h1>");
+                        }
+                        Err(e) => return Html("<h1>Session expired</h1>"),
+                    }
+                }
+                Err(e) => return Html("<h1>Unvalid UUID</h1>"),
+            }
+        }
+        Err(_) => return Html("<h1>Invalid cookie</h1>"),
     }
 }

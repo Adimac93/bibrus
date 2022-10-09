@@ -1,9 +1,10 @@
 // @generated automatically by Diesel CLI.
 
 diesel::table! {
-    schools (id) {
+    sessions (id) {
         id -> Uuid,
-        name -> Varchar,
+        iat -> Timestamp,
+        userid -> Uuid,
     }
 }
 
@@ -12,13 +13,9 @@ diesel::table! {
         id -> Uuid,
         login -> Varchar,
         password -> Varchar,
-        schoolid -> Nullable<Uuid>,
     }
 }
 
-diesel::joinable!(users -> schools (schoolid));
+diesel::joinable!(sessions -> users (userid));
 
-diesel::allow_tables_to_appear_in_same_query!(
-    schools,
-    users,
-);
+diesel::allow_tables_to_appear_in_same_query!(sessions, users,);

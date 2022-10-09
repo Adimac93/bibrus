@@ -1,118 +1,34 @@
-﻿use argon2;
-use rand::distributions::Alphanumeric;
-use rand::{thread_rng, Rng};
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use zxcvbn;
+use self::schema::sessions::dsl::*;
+use self::schema::users::dsl::*;
+use crate::schema::{sessions, users};
+use crate::{
+    models::{NewSession, NewUser, Session, User},
+    schema,
+};
+use diesel::{delete, insert_into, update};
+use diesel::{
+    prelude::*,
+    r2d2::{ConnectionManager, PooledConnection},
+};
+use rand::{distributions::Alphanumeric, thread_rng, Rng};
+use time::Duration;
+use uuid::Uuid;
 
-#[derive(Debug)]
-pub struct Users {
-    users: Vec<User>,
-}
-
-#[derive(Debug, Deserialize, PartialEq)]
-pub struct User {
-    pub username: String,
-    pub password: String,
-}
-
-#[derive(Deserialize)]
-pub struct UserName {
-    pub username: String,
-}
-
-#[derive(Deserialize)]
-pub struct UserNameChange {
-    pub username: String,
-    pub new_username: String,
-}
-
-#[derive(Serialize)]
-pub struct SessionId {
-    pub session_id: String,
-}
-
-#[derive(Default, Debug)]
-pub struct SessionStorage {
-    pub sessions: HashMap<String, String>,
-}
+pub type PgConn = PooledConnection<ConnectionManager<PgConnection>>;
 
 #[derive(PartialEq, Debug)]
 pub enum Error {
     UserAlreadyExists,
     UserNotFound,
     WeakPassword,
+    IncorrectPassword,
+    Unexpected,
+    SessionExpired,
 }
 
-impl Users {
-    pub fn new() -> Self {
-        Self { users: Vec::new() }
-    }
-
-    pub fn add_user(&mut self, name: String, pass: String) -> Result<(), Error> {
-        if self.get_idx_by_name(name.as_str()) != None {
-            Err(Error::UserAlreadyExists)
-        } else if !is_strong(pass.as_str()) {
-            Err(Error::WeakPassword)
-        } else {
-            Ok(self.users.push(User::new(name, pass)))
-        }
-    }
-
-    pub fn remove_user(&mut self, name: String) -> Result<(), Error> {
-        if let Some(i) = self.get_idx_by_name(name.as_str()) {
-            self.users.remove(i);
-            Ok(())
-        } else {
-            Err(Error::UserNotFound)
-        }
-    }
-
-    pub fn change_name(&mut self, name: String, new_name: String) -> Result<(), Error> {
-        if let Some(_) = self.get_idx_by_name(new_name.as_str()) {
-            Err(Error::UserAlreadyExists)
-        } else if let Some(i) = self.get_idx_by_name(name.as_str()) {
-            Ok(self.users[i].username = new_name)
-        } else {
-            Err(Error::UserNotFound)
-        }
-    }
-
-    pub fn change_pass(&mut self, name: String, new_pass: String) -> Result<(), Error> {
-        if !is_strong(new_pass.as_str()) {
-            Err(Error::WeakPassword)
-        } else if let Some(i) = self.get_idx_by_name(name.as_str()) {
-            Ok(self.users[i].password = hash_pass(new_pass.as_bytes()))
-        } else {
-            Err(Error::UserNotFound)
-        }
-    }
-
-    pub fn verify(&self, name: &str, pass: &str) -> bool {
-        if let Some(i) = self.get_idx_by_name(name) {
-            argon2::verify_encoded(self.users[i].password.as_str(), pass.as_bytes()).unwrap()
-        } else {
-            false
-        }
-    }
-
-    fn get_idx_by_name(&self, name: &str) -> Option<usize> {
-        self.users.iter().position(|x| x.username == name)
-    }
-}
-
-impl User {
-    fn new(username: String, password: String) -> Self {
-        Self {
-            username,
-            password: hash_pass(password.as_bytes()),
-        }
-    }
-}
-
-fn hash_pass(pass: &[u8]) -> String {
+fn hash_pass(pass: &str) -> String {
     let config = argon2::Config::default();
-    argon2::hash_encoded(pass, random_salt().as_bytes(), &config).unwrap()
+    argon2::hash_encoded(pass.as_bytes(), random_salt().as_bytes(), &config).unwrap()
 }
 
 fn random_salt() -> String {
@@ -123,38 +39,119 @@ fn random_salt() -> String {
 fn is_strong(pass: &str) -> bool {
     let score = zxcvbn::zxcvbn(pass, &[]);
     match score {
-        Ok(_) => score.unwrap().score() >= 3,
+        Ok(s) => s.score() >= 3,
         Err(_) => false,
     }
 }
 
-#[test]
-fn test() {
-    let mut users = Users::new();
-    assert_eq!(users.add_user("a".to_string(), "abcdef".to_string()), Err(Error::WeakPassword));
-    let _ = users.add_user("a".to_string(), "example_#pass#word#__a".to_string());
-    let _ = users.add_user("b".to_string(), "example_#pass#word#__b".to_string());
-    let _ = users.add_user("c".to_string(), "example_#pass#word#__c".to_string());
+pub fn try_create_new_user(
+    conn: &mut PgConn,
+    new_login: &str,
+    new_password: &str,
+) -> Result<(), Error> {
+    println!("Trying to create new user");
+    let is_unique = check_if_user_exsists(conn, new_login);
+    if is_unique {
+        if is_strong(new_password) {
+            let new_user = NewUser {
+                login: new_login,
+                password: &hash_pass(&new_password),
+            };
 
-    let _ = users.add_user("a".to_string(), "example_#pass#word#__i".to_string());
-    assert!(users.verify("a", "example_#pass#word#__a"));
-    assert!(!users.verify("a", "example_#pass#word#__i"));
+            let res = insert_into(users)
+                .values(vec![&new_user])
+                .returning(users::id)
+                .get_result::<uuid::Uuid>(conn);
 
-    assert!(users.verify("b", "example_#pass#word#__b"));
-    let _ = users.change_name("b".to_string(), "i".to_string());
-    assert!(users.verify("i", "example_#pass#word#__b"));
-    assert!(!users.verify("b", "example_#pass#word#__b"));
+            match res {
+                Ok(user_id) => {
+                    println!("Created user with uuid: {}", user_id);
+                    return Ok(());
+                } // register new session with id
+                Err(e) => {
+                    println!("Cannot register new user");
+                    return Err(Error::Unexpected);
+                }
+            }
+        }
+        println!("Too weak password");
+        return Err(Error::WeakPassword);
+    }
+    println!("User already exists");
+    return Err(Error::UserAlreadyExists);
+}
 
-    assert!(users.verify("c", "example_#pass#word#__c"));
-    assert_eq!(users.change_pass("c".to_string(), "abcdef".to_string()), Err(Error::WeakPassword));
-    let _ = users.change_pass("c".to_string(), "example_#pass#word#__i".to_string());
-    assert!(users.verify("c", "example_#pass#word#__i"));
-    assert!(!users.verify("c", "example_#pass#word#__c"));
+pub fn login_user(
+    conn: &mut PgConn,
+    user_login: String,
+    user_password: String,
+) -> Result<Uuid, Error> {
+    let res = users.filter(login.eq(user_login)).first::<User>(conn);
 
-    let _ = users.remove_user("i".to_string());
-    assert!(!users.verify("i", "example_#pass#word#__b"));
+    match res {
+        Ok(user) => {
+            if argon2::verify_encoded(&user.password, user_password.as_bytes()).unwrap() {
+                return Ok(user.id);
+            }
+            println!("Incorrect password!");
+            return Err(Error::IncorrectPassword);
+        }
 
-    let _ = users.add_user("d".to_string(), "example_#pass#word#__a".to_string());
-    assert!(users.verify("a", "example_#pass#word#__a"));
-    assert!(users.verify("d", "example_#pass#word#__a"));
+        Err(_) => {
+            println!("Login not found!");
+            Err(Error::UserNotFound)
+        }
+    }
+}
+
+pub fn try_get_session(conn: &mut PgConn, session_id: Uuid) -> Result<User, Error> {
+    // need to fetch corrresponding User
+    let res = sessions
+        .filter(sessions::id.eq(session_id))
+        .first::<Session>(conn);
+
+    match res {
+        Ok(session) => {
+            let res = users
+                .filter(users::id.eq(session.userid))
+                .first::<User>(conn);
+            let user = match res {
+                Ok(user) => user,
+                Err(e) => return Err(Error::Unexpected),
+            };
+            match session.iat.elapsed() {
+                Ok(duration) => {
+                    println!("Session time: {:?}", session.iat.elapsed().unwrap());
+                    if duration < Duration::minutes(10) {
+                        return Ok(user);
+                    }
+                    println!("Session expired!");
+                    delete(sessions.filter(sessions::id.eq(session.id)))
+                        .execute(conn)
+                        .unwrap();
+
+                    Err(Error::SessionExpired)
+                }
+                Err(e) => Err(Error::Unexpected),
+            }
+        }
+        Err(e) => Err(Error::Unexpected),
+    }
+}
+
+pub fn create_session(conn: &mut PgConn, user_id: Uuid) -> Uuid {
+    insert_into(sessions::table)
+        .values(userid.eq(user_id))
+        .returning(sessions::id)
+        .get_result::<Uuid>(conn)
+        .expect("Failed to create session")
+}
+
+pub fn check_if_user_exsists(conn: &mut PgConn, user_login: &str) -> bool {
+    let is_present = users
+        .filter(login.eq(user_login))
+        .first::<User>(conn)
+        .is_err();
+
+    is_present
 }

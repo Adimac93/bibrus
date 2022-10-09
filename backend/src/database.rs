@@ -1,8 +1,8 @@
-use std::env;
 use diesel::{
     prelude::*,
     r2d2::{ConnectionManager, Pool},
 };
+use std::env;
 
 pub type PgPool = Pool<ConnectionManager<PgConnection>>;
 

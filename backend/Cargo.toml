@@ -7,14 +7,18 @@ edition = "2021"
 
 [dependencies]
 axum = { version = "0.5.16", features = ["macros"] }
+# https://docs.rs/axum-extra/0.3.7/axum_extra/
 axum-extra = { version = "0.3.7", features = ["cookie", "cookie-signed"] }
 tokio = { version = "1.21.1", features = ["full"] }
 # https://github.com/diesel-rs/diesel/blob/2.0.x/diesel/Cargo.toml
-diesel = { version = "2.0.0", features = ["postgres", "r2d2", "chrono", "uuid","postgres_backend"] }
+diesel = { version = "2.0.0", features = ["postgres", "r2d2", "time", "uuid","postgres_backend"] }
 rust-argon2 = "1.0.0"
 rand = "0.8.5"
 serde = { version = "1.0.145", features = ["derive"] }
 tower-http = { version = "0.2.0", features = ["add-extension"] }
-time = "0.3.15"
+time = { version = "0.3.15"}
 uuid = { verison = "1.1.2", features = ["v4"] }
 zxcvbn = "2.2.1"
+dotenv = "0.15.0"
+anyhow = "1.0.65"
+thiserror = "1.0.37"
