@@ -50,35 +50,37 @@ pub fn try_create_new_user(
     new_password: &str,
 ) -> Result<(), Error> {
     println!("Trying to create new user");
-    let is_unique = check_if_user_exsists(conn, new_login);
-    if is_unique {
-        if is_strong(new_password) {
-            let new_user = NewUser {
-                login: new_login,
-                password: &hash_pass(&new_password),
-            };
+    let is_unique = !check_if_user_exists(conn, new_login);
+    if !is_unique {
+        println!("User already exists");
+        return Err(Error::UserAlreadyExists);
+    }
 
-            let res = insert_into(users)
-                .values(vec![&new_user])
-                .returning(users::id)
-                .get_result::<uuid::Uuid>(conn);
-
-            match res {
-                Ok(user_id) => {
-                    println!("Created user with uuid: {}", user_id);
-                    return Ok(());
-                } // register new session with id
-                Err(e) => {
-                    println!("Cannot register new user");
-                    return Err(Error::Unexpected);
-                }
-            }
-        }
+    if !is_strong(new_password) {
         println!("Too weak password");
         return Err(Error::WeakPassword);
     }
-    println!("User already exists");
-    return Err(Error::UserAlreadyExists);
+
+    let new_user = NewUser {
+        login: new_login,
+        password: &hash_pass(&new_password),
+    };
+
+    let res = insert_into(users)
+        .values(vec![&new_user])
+        .returning(users::id)
+        .get_result::<uuid::Uuid>(conn);
+
+    match res {
+        Ok(user_id) => {
+            println!("Created user with uuid: {}", user_id);
+            return Ok(());
+        } // register new session with id
+        Err(_e) => {
+            println!("Cannot register new user");
+            return Err(Error::Unexpected);
+        }
+    }
 }
 
 pub fn login_user(
@@ -117,7 +119,7 @@ pub fn try_get_session(conn: &mut PgConn, session_id: Uuid) -> Result<User, Erro
                 .first::<User>(conn);
             let user = match res {
                 Ok(user) => user,
-                Err(e) => return Err(Error::Unexpected),
+                Err(_e) => return Err(Error::Unexpected),
             };
             match session.iat.elapsed() {
                 Ok(duration) => {
@@ -132,10 +134,10 @@ pub fn try_get_session(conn: &mut PgConn, session_id: Uuid) -> Result<User, Erro
 
                     Err(Error::SessionExpired)
                 }
-                Err(e) => Err(Error::Unexpected),
+                Err(_e) => Err(Error::Unexpected),
             }
         }
-        Err(e) => Err(Error::Unexpected),
+        Err(_e) => Err(Error::Unexpected),
     }
 }
 
@@ -147,11 +149,11 @@ pub fn create_session(conn: &mut PgConn, user_id: Uuid) -> Uuid {
         .expect("Failed to create session")
 }
 
-pub fn check_if_user_exsists(conn: &mut PgConn, user_login: &str) -> bool {
+pub fn check_if_user_exists(conn: &mut PgConn, user_login: &str) -> bool {
     let is_present = users
         .filter(login.eq(user_login))
         .first::<User>(conn)
-        .is_err();
+        .is_ok();
 
     is_present
 }
