@@ -2,6 +2,7 @@ create table users
 (
     id uuid not null default gen_random_uuid() primary key,
     login varchar not null unique,
+    email varchar not null unique,
     password varchar not null
 );
 

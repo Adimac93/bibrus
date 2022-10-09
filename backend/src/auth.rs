@@ -48,11 +48,17 @@ fn is_strong(pass: &str) -> bool {
 pub fn try_create_new_user(
     conn: &mut PgConn,
     new_login: &str,
+    new_email: &str,
     new_password: &str,
 ) -> Result<(), Error> {
     println!("Trying to create new user");
-    if let Some(_) = get_user(conn, new_login) {
-        println!("User already exists");
+    if let Some(_) = get_by_login(conn, new_login) {
+        println!("User with this name already exists");
+        return Err(Error::UserAlreadyExists);
+    }
+
+    if let Some(_) = get_by_email(conn, new_email) {
+        println!("User with this email already exists");
         return Err(Error::UserAlreadyExists);
     }
 
@@ -63,6 +69,7 @@ pub fn try_create_new_user(
 
     let new_user = NewUser {
         login: new_login,
+        email: new_email,
         password: &hash_pass(&new_password),
     };
 
@@ -90,7 +97,7 @@ pub fn try_change_pass(
     new_pass: &str,
 ) -> Result<(), Error> {
     println!("Trying to change user password");
-    let res = get_user(conn, user_login);
+    let res = get_by_login(conn, user_login);
     
     if res == None {
         println!("User does not exist");
@@ -184,9 +191,19 @@ pub fn create_session(conn: &mut PgConn, user_id: Uuid) -> Uuid {
         .expect("Failed to create session")
 }
 
-pub fn get_user(conn: &mut PgConn, user_login: &str) -> Option<User> {
+pub fn get_by_login(conn: &mut PgConn, user_login: &str) -> Option<User> {
     let is_present = users
         .filter(login.eq(user_login))
+        .first::<User>(conn)
+        .optional()
+        .unwrap();
+
+    is_present
+}
+
+pub fn get_by_email(conn: &mut PgConn, user_email: &str) -> Option<User> {
+    let is_present = users
+        .filter(email.eq(user_email))
         .first::<User>(conn)
         .optional()
         .unwrap();

@@ -56,6 +56,7 @@ async fn handler() -> Html<&'static str> {
 #[derive(Deserialize)]
 struct AuthUser {
     login: String,
+    email: String,
     password: String,
 }
 
@@ -65,7 +66,7 @@ async fn POST_register_user(
 ) -> Html<&'static str> {
     let mut conn = pool.get().unwrap();
 
-    match try_create_new_user(&mut conn, &payload.login, &payload.password) {
+    match try_create_new_user(&mut conn, &payload.login, &payload.email, &payload.password) {
         Ok(_) => Html("<h1>Registered</h1>"),
         Err(_e) => Html("<h1>Failed to register</h1>"),
     }
