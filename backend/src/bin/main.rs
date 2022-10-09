@@ -1,5 +1,5 @@
 use axum::{
-    debug_handler, extract,
+    extract,
     http::{Request, StatusCode},
     middleware::{self, Next},
     response::{Html, Json},
