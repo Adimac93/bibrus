@@ -2,16 +2,16 @@ use axum::{
     debug_handler, extract,
     http::{Request, StatusCode},
     middleware::{self, Next},
-    response::{Html, Json},
+    response::{Html},
     routing::{get, post},
     Extension, Router,
 };
 use axum_extra::extract::{
-    cookie::{Cookie, Key, SignedCookieJar},
+    cookie::{Cookie, Key},
     CookieJar,
 };
 use backend::{
-    auth::{create_session, login_user, try_create_new_user, try_get_session},
+    auth::{create_session, login_user, try_create_new_user, try_get_session, try_change_pass},
     database::{get_connection_pool, PgPool},
 };
 use dotenv::dotenv;
@@ -31,7 +31,8 @@ async fn main() {
     let auth_routes = Router::new()
         .route("/register", post(POST_register_user))
         .route("/login", post(POST_login_user))
-        .layer(Extension(key));
+        .layer(Extension(key))
+        .route("/change-pass", post(POST_change_pass));
 
     let app = Router::new()
         .route("/", get(handler))
@@ -66,7 +67,26 @@ async fn POST_register_user(
 
     match try_create_new_user(&mut conn, &payload.login, &payload.password) {
         Ok(_) => Html("<h1>Registered</h1>"),
-        Err(e) => Html("<h1>Failed to register</h1>"),
+        Err(_e) => Html("<h1>Failed to register</h1>"),
+    }
+}
+
+#[derive(Deserialize)]
+struct ChangePass {
+    login: String,
+    pass: String,
+    new_pass: String,
+}
+
+async fn POST_change_pass(
+    extract::Json(payload): extract::Json<ChangePass>,
+    pool: Extension<PgPool>,
+) -> Html<&'static str> {
+    let mut conn = pool.get().unwrap();
+
+    match try_change_pass(&mut conn, &payload.login, &payload.pass, &payload.new_pass) {
+        Ok(_) => Html("Password changed"),
+        Err(_) => Html("Failed to change password"),
     }
 }
 
@@ -76,7 +96,7 @@ async fn POST_login_user(
     jar: CookieJar,
 ) -> Result<(CookieJar, Html<&'static str>), StatusCode> {
     let mut conn = pool.get().unwrap();
-    match login_user(&mut conn, payload.login, payload.password) {
+    match login_user(&mut conn, &payload.login, &payload.password) {
         Ok(user_id) => {
             Html("<h1>Logged in</h1>");
             let session_id = create_session(&mut conn, user_id);
@@ -88,11 +108,11 @@ async fn POST_login_user(
                 .finish();
             Ok((jar.add(cookie), Html("<h1>Logged in</h1>")))
         }
-        Err(e) => Err(StatusCode::UNAUTHORIZED),
+        Err(_e) => Err(StatusCode::UNAUTHORIZED),
     }
 }
 
-async fn auth_middleware<B>(req: Request<B>, res: Next<B>) -> Html<&'static str> {
+async fn auth_middleware<B>(req: Request<B>, _res: Next<B>) -> Html<&'static str> {
     let pool = req.extensions().get::<PgPool>().unwrap();
     let cookie_header = req.headers().get("cookie");
     let session_cookie = match cookie_header {
@@ -114,10 +134,10 @@ async fn auth_middleware<B>(req: Request<B>, res: Next<B>) -> Html<&'static str>
                             println!("{user:#?}");
                             return Html("<h1>Session ok</h1>");
                         }
-                        Err(e) => return Html("<h1>Session expired</h1>"),
+                        Err(_e) => return Html("<h1>Session expired</h1>"),
                     }
                 }
-                Err(e) => return Html("<h1>Unvalid UUID</h1>"),
+                Err(_e) => return Html("<h1>Unvalid UUID</h1>"),
             }
         }
         Err(_) => return Html("<h1>Invalid cookie</h1>"),

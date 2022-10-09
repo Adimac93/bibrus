@@ -5,7 +5,8 @@ use crate::{
     models::{NewSession, NewUser, Session, User},
     schema,
 };
-use diesel::{delete, insert_into};
+use axum::extract::Query;
+use diesel::{delete, insert_into, update};
 use diesel::{
     prelude::*,
     r2d2::{ConnectionManager, PooledConnection},
@@ -50,8 +51,7 @@ pub fn try_create_new_user(
     new_password: &str,
 ) -> Result<(), Error> {
     println!("Trying to create new user");
-    let is_unique = !check_if_user_exists(conn, new_login);
-    if !is_unique {
+    if let Some(_) = get_user(conn, new_login) {
         println!("User already exists");
         return Err(Error::UserAlreadyExists);
     }
@@ -83,10 +83,42 @@ pub fn try_create_new_user(
     }
 }
 
+pub fn try_change_pass(
+    conn: &mut PgConn,
+    user_login: &str,
+    pass: &str,
+    new_pass: &str,
+) -> Result<(), Error> {
+    println!("Trying to change user password");
+    let res = get_user(conn, user_login);
+    
+    if res == None {
+        println!("User does not exist");
+        return Err(Error::UserNotFound);
+    }
+
+    let user = res.unwrap();
+    if !argon2::verify_encoded(&user.password, pass.as_bytes()).unwrap() {
+        println!("Wrong password");
+        return Err(Error::IncorrectPassword)
+    }
+
+    let query = update(users.filter(login.eq(user_login)))
+    .set(password.eq(hash_pass(new_pass)))
+    .get_result::<User>(conn);
+
+    if query.is_err() {
+        println!("Query failed");
+        Err(Error::Unexpected)
+    } else {
+        Ok(())
+    }
+}
+
 pub fn login_user(
     conn: &mut PgConn,
-    user_login: String,
-    user_password: String,
+    user_login: &str,
+    user_password: &str,
 ) -> Result<Uuid, Error> {
     let res = users.filter(login.eq(user_login)).first::<User>(conn);
 
@@ -107,13 +139,15 @@ pub fn login_user(
 }
 
 pub fn try_get_session(conn: &mut PgConn, session_id: Uuid) -> Result<User, Error> {
-    // need to fetch corrresponding User
+    // need to fetch corresponding User
+    // finds a corresponding session id
     let res = sessions
         .filter(sessions::id.eq(session_id))
         .first::<Session>(conn);
 
     match res {
         Ok(session) => {
+            // finds a user with this session id
             let res = users
                 .filter(users::id.eq(session.userid))
                 .first::<User>(conn);
@@ -123,6 +157,7 @@ pub fn try_get_session(conn: &mut PgConn, session_id: Uuid) -> Result<User, Erro
             };
             match session.iat.elapsed() {
                 Ok(duration) => {
+                    // verifies whether the session hasn't expired
                     println!("Session time: {:?}", session.iat.elapsed().unwrap());
                     if duration < Duration::minutes(10) {
                         return Ok(user);
@@ -149,11 +184,12 @@ pub fn create_session(conn: &mut PgConn, user_id: Uuid) -> Uuid {
         .expect("Failed to create session")
 }
 
-pub fn check_if_user_exists(conn: &mut PgConn, user_login: &str) -> bool {
+pub fn get_user(conn: &mut PgConn, user_login: &str) -> Option<User> {
     let is_present = users
         .filter(login.eq(user_login))
         .first::<User>(conn)
-        .is_ok();
+        .optional()
+        .unwrap();
 
     is_present
 }
