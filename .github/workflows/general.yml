@@ -10,8 +10,6 @@ on:
       -  "backend/**"
       - ".github/workflows/general.yaml"
 
-  
-
 env:
   CARGO_TERM_COLOR: always
 
@@ -30,7 +28,6 @@ jobs:
       - uses: actions-rs/cargo@v1
         with:
           command: test
-          working-directory: /backend
 
   fmt:
     name: Rustfmt
@@ -45,8 +42,7 @@ jobs:
       - uses: actions-rs/cargo@v1
         with:
           command: fmt
-          args: --all -- --check
-          working-directory: /backend
+          args: --all
 
   clippy:
     name: Clippy
@@ -62,7 +58,6 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           args: -- -D warnings
-          working-directory: /backend
 
   coverage:
     name: Code coverage
@@ -79,4 +74,3 @@ jobs:
         uses: actions-rs/tarpaulin@v0.1
         with:
           args: '--ignore-tests'
-          working-directory: /backend
