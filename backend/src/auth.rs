@@ -45,8 +45,8 @@ fn random_salt() -> String {
     (0..8).map(|_| rng.sample(Alphanumeric) as char).collect()
 }
 
-fn is_strong(pass: &str) -> bool {
-    let score = zxcvbn::zxcvbn(pass, &[]);
+fn is_strong(user_password: &str, user_inputs: &[&str]) -> bool {
+    let score = zxcvbn::zxcvbn(user_password, user_inputs);
     match score {
         Ok(s) => s.score() >= 3,
         Err(_) => false,
@@ -70,7 +70,7 @@ pub fn try_create_new_user(
         return Err(AuthError::UserAlreadyExists);
     }
 
-    if !is_strong(new_password) {
+    if !is_strong(new_password, &[new_login, new_email]) {
         println!("Too weak password");
         return Err(AuthError::WeakPassword);
     }
@@ -114,7 +114,7 @@ pub fn try_change_pass(
         return Err(AuthError::IncorrectPassword);
     }
 
-    if !is_strong(new_pass) {
+    if !is_strong(new_pass, &[&user.login, &user.email]) {
         println!("Too weak password");
         return Err(AuthError::WeakPassword);
     }
