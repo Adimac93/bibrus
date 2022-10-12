@@ -2,7 +2,7 @@ use axum::{
     debug_handler, extract,
     http::{Request, StatusCode},
     middleware::{self, Next},
-    response::{Html},
+    response::Html,
     routing::{get, post},
     Extension, Router,
 };
@@ -11,7 +11,10 @@ use axum_extra::extract::{
     CookieJar,
 };
 use backend::{
-    auth::{create_session, login_user, try_create_new_user, try_get_session, try_change_pass, AuthError},
+    auth::{
+        create_session, login_user, try_change_pass, try_create_new_user, try_get_session,
+        AuthError,
+    },
     database::{get_connection_pool, PgPool},
 };
 use dotenv::dotenv;
@@ -29,10 +32,10 @@ async fn main() {
     // build our application with a route
 
     let auth_routes = Router::new()
-        .route("/register", post(POST_register_user))
-        .route("/login", post(POST_login_user))
+        .route("/register", post(post_register_user))
+        .route("/login", post(post_login_user))
         .layer(Extension(key))
-        .route("/change-pass", post(POST_change_pass));
+        .route("/change-pass", post(post_change_pass));
 
     let app = Router::new()
         .route("/", get(handler))
@@ -62,7 +65,7 @@ struct AuthUser {
 }
 
 #[debug_handler]
-async fn POST_register_user(
+async fn post_register_user(
     extract::Json(payload): extract::Json<AuthUser>,
     pool: Extension<PgPool>,
 ) -> Result<Html<&'static str>, StatusCode> {
@@ -72,7 +75,7 @@ async fn POST_register_user(
     match try_create_new_user(&mut conn, &payload.login, &payload.email, &payload.password) {
         Ok(_) => Ok(Html("<h1>Registered</h1>")),
         Err(AuthError::UserAlreadyExists) => Err(StatusCode::BAD_REQUEST), //which status code?
-        Err(AuthError::WeakPassword) => Err(StatusCode::BAD_REQUEST), //which status code?
+        Err(AuthError::WeakPassword) => Err(StatusCode::BAD_REQUEST),      //which status code?
         Err(AuthError::Unexpected(_)) => Err(StatusCode::INTERNAL_SERVER_ERROR),
         _ => Err(StatusCode::NOT_IMPLEMENTED),
     }
@@ -85,7 +88,7 @@ struct ChangePass {
     new_pass: String,
 }
 
-async fn POST_change_pass(
+async fn post_change_pass(
     extract::Json(payload): extract::Json<ChangePass>,
     pool: Extension<PgPool>,
 ) -> Result<Html<&'static str>, StatusCode> {
@@ -96,13 +99,13 @@ async fn POST_change_pass(
         Ok(_) => Ok(Html("<h1>Password changed</h1>")),
         Err(AuthError::UserNotFound) => Err(StatusCode::NOT_FOUND),
         Err(AuthError::IncorrectPassword) => Err(StatusCode::FORBIDDEN), //which status code?
-        Err(AuthError::WeakPassword) => Err(StatusCode::BAD_REQUEST), //which status code?
+        Err(AuthError::WeakPassword) => Err(StatusCode::BAD_REQUEST),    //which status code?
         Err(AuthError::Unexpected(_)) => Err(StatusCode::INTERNAL_SERVER_ERROR),
         _ => Err(StatusCode::NOT_IMPLEMENTED),
     }
 }
 
-async fn POST_login_user(
+async fn post_login_user(
     extract::Json(payload): extract::Json<AuthUser>,
     pool: Extension<PgPool>,
     jar: CookieJar,
@@ -111,7 +114,6 @@ async fn POST_login_user(
     let mut conn = pool.get().unwrap();
     match login_user(&mut conn, &payload.login, &payload.password) {
         Ok(user_id) => {
-            Html("<h1>Logged in</h1>");
             let session_id = create_session(&mut conn, user_id)?;
             let cookie = Cookie::build("session_id", session_id.to_string())
                 .path("/")
@@ -127,7 +129,10 @@ async fn POST_login_user(
     }
 }
 
-async fn auth_middleware<B>(req: Request<B>, _res: Next<B>) -> Result<Html<&'static str>, StatusCode> {
+async fn auth_middleware<B>(
+    req: Request<B>,
+    _res: Next<B>,
+) -> Result<Html<&'static str>, StatusCode> {
     //unresolved error
     let pool = req.extensions().get::<PgPool>().unwrap();
     let cookie_header = req.headers().get("cookie");
@@ -148,11 +153,11 @@ async fn auth_middleware<B>(req: Request<B>, _res: Next<B>) -> Result<Html<&'sta
             match try_get_session(&mut conn, id) {
                 Ok(user) => {
                     println!("{user:#?}");
-                    return Ok(Html("<h1>Session ok</h1>"));
+                    Ok(Html("<h1>Session ok</h1>"))
                 }
-                Err(_e) => return Err(StatusCode::GONE), //session expired
+                Err(_e) => Err(StatusCode::GONE), //session expired
             }
         }
-        Err(_e) => return Err(StatusCode::UNAUTHORIZED), //invalid uuid, which status code?
+        Err(_e) => Err(StatusCode::UNAUTHORIZED), //invalid uuid, which status code?
     }
 }

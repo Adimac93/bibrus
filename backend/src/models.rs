@@ -2,7 +2,7 @@ use crate::schema::{sessions, users};
 use diesel::prelude::*;
 use uuid::Uuid;
 
-#[derive(Queryable, Debug, PartialEq)]
+#[derive(Queryable, Debug, PartialEq, Eq)]
 pub struct User {
     pub id: Uuid,
     pub login: String,
