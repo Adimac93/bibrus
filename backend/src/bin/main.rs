@@ -22,11 +22,19 @@ use serde::Deserialize;
 use std::{net::SocketAddr, str::FromStr};
 use time::Duration;
 use uuid::Uuid;
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[tokio::main]
 async fn main() {
     // load env variables from .env file
     dotenv().ok();
+
+    tracing_subscriber::registry()
+    .with(tracing_subscriber::EnvFilter::new(
+        std::env::var("RUST_LOG").unwrap_or_else(|_| "backend=debug".into()),
+    ))
+    .with(tracing_subscriber::fmt::layer())
+    .init();
 
     let key = Key::generate();
     // build our application with a route
@@ -114,7 +122,9 @@ async fn post_login_user(
     let mut conn = pool.get().unwrap();
     match login_user(&mut conn, &payload.login, &payload.password) {
         Ok(user_id) => {
-            let session_id = create_session(&mut conn, user_id)?;
+            let session_id = create_session(&mut conn, user_id)
+            .map_err(|_e| StatusCode::INTERNAL_SERVER_ERROR)?;
+            
             let cookie = Cookie::build("session_id", session_id.to_string())
                 .path("/")
                 .http_only(true)

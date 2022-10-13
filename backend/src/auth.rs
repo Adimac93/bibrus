@@ -5,8 +5,7 @@ use crate::{
     models::{NewUser, Session, User},
     schema,
 };
-use anyhow::Result;
-use axum::http::StatusCode;
+use anyhow::{Context, Result};
 use diesel::{delete, insert_into, update};
 use diesel::{
     prelude::*,
@@ -32,12 +31,13 @@ pub enum AuthError {
     #[error("Session expired")]
     SessionExpired,
     #[error(transparent)]
-    Unexpected(#[from] Box<dyn std::error::Error>),
+    Unexpected(#[from] anyhow::Error),
 }
 
-fn hash_pass(pass: &str) -> Result<String, argon2::Error> {
+fn hash_pass(pass: &str) -> anyhow::Result<String> {
     let config = argon2::Config::default();
     argon2::hash_encoded(pass.as_bytes(), random_salt().as_bytes(), &config)
+    .context("Failed to hash a password.")
 }
 
 fn random_salt() -> String {
@@ -60,12 +60,12 @@ pub fn try_create_new_user(
     new_password: &str,
 ) -> Result<(), AuthError> {
     println!("Trying to create new user");
-    if (get_by_login(conn, new_login).map_err(|e| AuthError::Unexpected(Box::new(e)))?).is_some() {
+    if get_by_login(conn, new_login)?.is_some() {
         println!("User with this name already exists");
         return Err(AuthError::UserAlreadyExists);
     }
 
-    if (get_by_email(conn, new_email).map_err(|e| AuthError::Unexpected(Box::new(e)))?).is_some() {
+    if get_by_email(conn, new_email)?.is_some() {
         println!("User with this email already exists");
         return Err(AuthError::UserAlreadyExists);
     }
@@ -78,14 +78,14 @@ pub fn try_create_new_user(
     let new_user = NewUser {
         login: new_login,
         email: new_email,
-        password: &hash_pass(new_password).map_err(|e| AuthError::Unexpected(Box::new(e)))?,
+        password: &hash_pass(new_password)?,
     };
 
     let user_id = insert_into(users)
         .values(vec![&new_user])
         .returning(users::id)
         .get_result::<uuid::Uuid>(conn)
-        .map_err(|e| AuthError::Unexpected(Box::new(e)))?;
+        .context("Failed to insert user")?;
 
     println!("Created user with uuid: {}", user_id);
     Ok(())
@@ -98,7 +98,7 @@ pub fn try_change_pass(
     new_pass: &str,
 ) -> Result<(), AuthError> {
     println!("Trying to change user password");
-    let res = get_by_login(conn, user_login).map_err(|e| AuthError::Unexpected(Box::new(e)))?;
+    let res = get_by_login(conn, user_login)?;
 
     if res == None {
         println!("User does not exist");
@@ -108,7 +108,7 @@ pub fn try_change_pass(
     let user = res.unwrap();
 
     if !argon2::verify_encoded(&user.password, pass.as_bytes())
-        .map_err(|e| AuthError::Unexpected(Box::new(e)))?
+        .context("Failed to verify password")?
     {
         println!("Wrong password");
         return Err(AuthError::IncorrectPassword);
@@ -120,9 +120,9 @@ pub fn try_change_pass(
     }
 
     update(users.filter(login.eq(user_login)))
-        .set(password.eq(hash_pass(new_pass).map_err(|e| AuthError::Unexpected(Box::new(e)))?))
+        .set(password.eq(hash_pass(new_pass)?))
         .get_result::<User>(conn)
-        .map_err(|e| AuthError::Unexpected(Box::new(e)))?;
+        .context("Failed to update user.")?;
 
     Ok(())
 }
@@ -137,7 +137,7 @@ pub fn login_user(
     match res {
         Ok(user) => {
             if argon2::verify_encoded(&user.password, user_password.as_bytes())
-                .map_err(|e| AuthError::Unexpected(Box::new(e)))?
+                .context("Failed to verify password.")?
             {
                 return Ok(user.id);
             }
@@ -158,18 +158,18 @@ pub fn try_get_session(conn: &mut PgConn, session_id: Uuid) -> Result<User, Auth
     let session = sessions
         .filter(sessions::id.eq(session_id))
         .first::<Session>(conn)
-        .map_err(|e| AuthError::Unexpected(Box::new(e)))?;
+        .context("Failed to fetch session")?;
 
     // finds a user with this session id
     let user = users
         .filter(users::id.eq(session.userid))
         .first::<User>(conn)
-        .map_err(|e| AuthError::Unexpected(Box::new(e)))?;
+        .context("Failed to fetch user")?;
 
     let duration = session
         .iat
         .elapsed()
-        .map_err(|e| AuthError::Unexpected(Box::new(e)))?;
+        .context("Failed to check session time")?;
 
     // verifies whether the session hasn't expired
     println!("Session time: {:?}", duration);
@@ -179,35 +179,37 @@ pub fn try_get_session(conn: &mut PgConn, session_id: Uuid) -> Result<User, Auth
     println!("Session expired!");
     delete(sessions.filter(sessions::id.eq(session.id)))
         .execute(conn)
-        .map_err(|e| AuthError::Unexpected(Box::new(e)))?;
+        .context("Failed to delete session")?;
 
     Err(AuthError::SessionExpired)
 }
 
-pub fn create_session(conn: &mut PgConn, user_id: Uuid) -> Result<Uuid, StatusCode> {
+pub fn create_session(conn: &mut PgConn, user_id: Uuid) -> anyhow::Result<Uuid> {
     insert_into(sessions::table)
         .values(userid.eq(user_id))
         .returning(sessions::id)
         .get_result::<Uuid>(conn)
-        .map_err(|_e| StatusCode::INTERNAL_SERVER_ERROR)
+        .context("Failed to create session")
 }
 
 pub fn get_by_login(
     conn: &mut PgConn,
     user_login: &str,
-) -> Result<Option<User>, diesel::result::Error> {
+) -> anyhow::Result<Option<User>> {
     users
         .filter(login.eq(user_login))
         .first::<User>(conn)
         .optional()
+        .context("Failed to fetch user by login")
 }
 
 pub fn get_by_email(
     conn: &mut PgConn,
     user_email: &str,
-) -> Result<Option<User>, diesel::result::Error> {
+) -> anyhow::Result<Option<User>> {
     users
         .filter(email.eq(user_email))
         .first::<User>(conn)
         .optional()
+        .context("Failed to fetch user by email")
 }

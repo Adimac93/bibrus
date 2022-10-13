@@ -22,3 +22,4 @@ zxcvbn = "2.2.1"
 dotenv = "0.15.0"
 anyhow = "1.0.65"
 thiserror = "1.0.37"
+tracing-subscriber = { version = "0.3.16", features = ["env-filter"] }
