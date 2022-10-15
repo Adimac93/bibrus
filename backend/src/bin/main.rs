@@ -26,39 +26,37 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[tokio::main]
 async fn main() {
-    // load env variables from .env file
-    dotenv().ok();
-
     tracing_subscriber::registry()
-    .with(tracing_subscriber::EnvFilter::new(
-        std::env::var("RUST_LOG").unwrap_or_else(|_| "backend=debug".into()),
-    ))
-    .with(tracing_subscriber::fmt::layer())
-    .init();
+        .with(tracing_subscriber::EnvFilter::new(
+            std::env::var("RUST_LOG").unwrap_or_else(|_| "backend=debug".into()),
+        ))
+        .with(tracing_subscriber::fmt::layer())
+        .init();
+
+    let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
+    println!("listening on {}", addr);
+    axum::Server::bind(&addr)
+        .serve(app().into_make_service())
+        .await
+        .expect("Failed to run axum server");
+}
 
     let key = Key::generate();
     // build our application with a route
+pub fn app() -> Router {
+    dotenv().ok();
 
     let auth_routes = Router::new()
         .route("/register", post(post_register_user))
         .route("/login", post(post_login_user))
-        .layer(Extension(key))
         .route("/change-pass", post(post_change_pass));
 
-    let app = Router::new()
+    Router::new()
         .route("/", get(handler))
         .layer(middleware::from_fn(auth_middleware))
         .nest("/api/auth", auth_routes)
-        .layer(Extension(get_connection_pool()));
-
-    // run it
-    let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
-    println!("listening on {}", addr);
-    axum::Server::bind(&addr)
-        .serve(app.into_make_service())
-        .await
-        //unresolved error
-        .unwrap();
+        .layer(Extension(get_connection_pool()))
+        .layer(TraceLayer::new_for_http())
 }
 
 async fn handler() -> Html<&'static str> {
