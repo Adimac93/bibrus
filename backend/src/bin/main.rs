@@ -1,28 +1,27 @@
 use axum::{
-    debug_handler, extract,
+    debug_handler,
+    extract,
     http::{Request, StatusCode},
     middleware::{self, Next},
     response::Html,
     routing::{get, post},
     Extension, Router,
 };
-use axum_extra::extract::{
-    cookie::{Cookie, Key},
-    CookieJar,
-};
+use axum_extra::extract::{cookie::Cookie, CookieJar};
 use backend::{
     auth::{
-        create_session, login_user, try_change_pass, try_create_new_user, try_get_session,
-        AuthError,
+        create_session, login_user, try_change_pass, try_create_new_user,
+        try_get_session, AuthError,
     },
     database::{get_connection_pool, PgPool},
 };
 use dotenv::dotenv;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::{net::SocketAddr, str::FromStr};
 use time::Duration;
-use uuid::Uuid;
+use tower_http::trace::TraceLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+use uuid::Uuid;
 
 #[tokio::main]
 async fn main() {
@@ -41,8 +40,6 @@ async fn main() {
         .expect("Failed to run axum server");
 }
 
-    let key = Key::generate();
-    // build our application with a route
 pub fn app() -> Router {
     dotenv().ok();
 
@@ -63,7 +60,7 @@ async fn handler() -> Html<&'static str> {
     Html("<h1>Hello, World!</h1>")
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 struct AuthUser {
     login: String,
     email: String,
@@ -121,8 +118,8 @@ async fn post_login_user(
     match login_user(&mut conn, &payload.login, &payload.password) {
         Ok(user_id) => {
             let session_id = create_session(&mut conn, user_id)
-            .map_err(|_e| StatusCode::INTERNAL_SERVER_ERROR)?;
-            
+                .map_err(|_e| StatusCode::INTERNAL_SERVER_ERROR)?;
+
             let cookie = Cookie::build("session_id", session_id.to_string())
                 .path("/")
                 .http_only(true)
@@ -167,5 +164,62 @@ async fn auth_middleware<B>(
             }
         }
         Err(_e) => Err(StatusCode::UNAUTHORIZED), //invalid uuid, which status code?
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use reqwest::Client;
+    use std::net::TcpListener;
+
+    async fn spawn_app() -> SocketAddr {
+        let listener = TcpListener::bind(SocketAddr::from(([127, 0, 0, 1], 3000))).unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        tokio::spawn(async move {
+            axum::Server::from_tcp(listener)
+                .unwrap()
+                .serve(app().into_make_service())
+                .await
+                .unwrap();
+        });
+
+        addr
+    }
+
+    #[tokio::test]
+    async fn register_and_login() {
+        let addr = spawn_app().await;
+        let client = Client::new();
+
+        let payload = AuthUser {
+            login: format!("test_user_{}", Uuid::new_v4().to_string()),
+            email: format!("{}@gmail.com", Uuid::new_v4().to_string()),
+            password: "strong_pass12345".into(),
+        };
+
+        let res = client
+            .post(format!("http://{}/api/auth/register", addr))
+            .json(&payload)
+            .send()
+            .await
+            .unwrap();
+
+        assert_eq!(res.status(),StatusCode::OK);
+
+        let res = client
+            .post(format!("http://{}/api/auth/login", addr))
+            .json(&payload)
+            .send()
+            .await
+            .unwrap();
+
+        assert_eq!(res.status(),StatusCode::OK);
+        
+        let session_id = match res.cookies().find(|x| x.name() == "session_id") {
+            Some(cookie) => Uuid::from_str(cookie.value()).unwrap(),
+            None => panic!(),
+        };
     }
 }

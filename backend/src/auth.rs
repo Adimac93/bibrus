@@ -37,7 +37,7 @@ pub enum AuthError {
 fn hash_pass(pass: &str) -> anyhow::Result<String> {
     let config = argon2::Config::default();
     argon2::hash_encoded(pass.as_bytes(), random_salt().as_bytes(), &config)
-    .context("Failed to hash a password.")
+        .context("Failed to hash a password.")
 }
 
 fn random_salt() -> String {
@@ -192,10 +192,7 @@ pub fn create_session(conn: &mut PgConn, user_id: Uuid) -> anyhow::Result<Uuid> 
         .context("Failed to create session")
 }
 
-pub fn get_by_login(
-    conn: &mut PgConn,
-    user_login: &str,
-) -> anyhow::Result<Option<User>> {
+pub fn get_by_login(conn: &mut PgConn, user_login: &str) -> anyhow::Result<Option<User>> {
     users
         .filter(login.eq(user_login))
         .first::<User>(conn)
@@ -203,10 +200,7 @@ pub fn get_by_login(
         .context("Failed to fetch user by login")
 }
 
-pub fn get_by_email(
-    conn: &mut PgConn,
-    user_email: &str,
-) -> anyhow::Result<Option<User>> {
+pub fn get_by_email(conn: &mut PgConn, user_email: &str) -> anyhow::Result<Option<User>> {
     users
         .filter(email.eq(user_email))
         .first::<User>(conn)
