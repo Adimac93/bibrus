@@ -18,8 +18,8 @@ diesel::table! {
 
 diesel::table! {
     grades (student_id, subject_id, task_id) {
-        value -> Nullable<Float8>,
-        weight -> Nullable<Int4>,
+        value -> Float8,
+        weight -> Int4,
         task_id -> Uuid,
         student_id -> Uuid,
         subject_id -> Uuid,
@@ -75,7 +75,7 @@ diesel::table! {
 diesel::table! {
     tasks (id) {
         id -> Uuid,
-        name -> Nullable<Varchar>,
+        name -> Varchar,
     }
 }
 

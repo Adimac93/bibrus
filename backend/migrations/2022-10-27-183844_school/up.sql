@@ -62,13 +62,13 @@ create table class_students(
 
 create table tasks(
     id uuid not null default gen_random_uuid() primary key,
-    name varchar
+    name varchar not null
 );
 
 create table grades(
     primary key (student_id, subject_id, task_id),
-    value float,
-    weight int,
+    value float not null,
+    weight int not null,
     task_id uuid,
     student_id uuid not null,
     subject_id uuid not null,
