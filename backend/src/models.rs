@@ -22,11 +22,11 @@ pub struct NewUser<'a> {
 pub struct Session {
     pub id: Uuid,
     pub iat: std::time::SystemTime,
-    pub userid: Uuid,
+    pub user_id: Uuid,
 }
 
 #[derive(Insertable)]
 #[diesel(table_name = sessions)]
 pub struct NewSession {
-    pub userid: Uuid,
+    pub user_id: Uuid,
 }

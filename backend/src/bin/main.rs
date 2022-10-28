@@ -1,6 +1,5 @@
 use axum::{
-    debug_handler,
-    extract,
+    debug_handler, extract,
     http::{Request, StatusCode},
     middleware::{self, Next},
     response::Html,
@@ -10,8 +9,8 @@ use axum::{
 use axum_extra::extract::{cookie::Cookie, CookieJar};
 use backend::{
     auth::{
-        create_session, login_user, try_change_pass, try_create_new_user,
-        try_get_session, AuthError,
+        create_session, login_user, try_change_pass, try_create_new_user, try_get_session,
+        AuthError,
     },
     database::{get_connection_pool, PgPool},
 };
@@ -206,7 +205,7 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(res.status(),StatusCode::OK);
+        assert_eq!(res.status(), StatusCode::OK);
 
         let res = client
             .post(format!("http://{}/api/auth/login", addr))
@@ -215,8 +214,8 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(res.status(),StatusCode::OK);
-        
+        assert_eq!(res.status(), StatusCode::OK);
+
         let session_id = match res.cookies().find(|x| x.name() == "session_id") {
             Some(cookie) => Uuid::from_str(cookie.value()).unwrap(),
             None => panic!(),

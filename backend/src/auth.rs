@@ -81,13 +81,13 @@ pub fn try_create_new_user(
         password: &hash_pass(new_password)?,
     };
 
-    let user_id = insert_into(users)
+    let user_uuid = insert_into(users)
         .values(vec![&new_user])
         .returning(users::id)
         .get_result::<uuid::Uuid>(conn)
         .context("Failed to insert user")?;
 
-    println!("Created user with uuid: {}", user_id);
+    println!("Created user with uuid: {}", user_uuid);
     Ok(())
 }
 
@@ -162,7 +162,7 @@ pub fn try_get_session(conn: &mut PgConn, session_id: Uuid) -> Result<User, Auth
 
     // finds a user with this session id
     let user = users
-        .filter(users::id.eq(session.userid))
+        .filter(users::id.eq(session.user_id))
         .first::<User>(conn)
         .context("Failed to fetch user")?;
 
@@ -184,9 +184,9 @@ pub fn try_get_session(conn: &mut PgConn, session_id: Uuid) -> Result<User, Auth
     Err(AuthError::SessionExpired)
 }
 
-pub fn create_session(conn: &mut PgConn, user_id: Uuid) -> anyhow::Result<Uuid> {
+pub fn create_session(conn: &mut PgConn, user_uuid: Uuid) -> anyhow::Result<Uuid> {
     insert_into(sessions::table)
-        .values(userid.eq(user_id))
+        .values(user_id.eq(user_uuid))
         .returning(sessions::id)
         .get_result::<Uuid>(conn)
         .context("Failed to create session")
