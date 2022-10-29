@@ -10,8 +10,8 @@ diesel::table! {
 diesel::table! {
     classes (id) {
         id -> Uuid,
-        subject_id -> Nullable<Uuid>,
-        group_id -> Nullable<Uuid>,
+        subject_id -> Uuid,
+        group_id -> Uuid,
         teacher_id -> Uuid,
     }
 }

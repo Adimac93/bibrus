@@ -44,8 +44,8 @@ create table teachers(
 
 create table classes(
     id uuid not null default gen_random_uuid() primary key,
-    subject_id uuid,
-    group_id uuid,
+    subject_id uuid not null,
+    group_id uuid not null,
     teacher_id uuid not null,
     foreign key (subject_id)  references subjects(id),
     foreign key (group_id) references groups(id),
@@ -69,7 +69,7 @@ create table grades(
     primary key (student_id, subject_id, task_id),
     value float not null,
     weight int not null,
-    task_id uuid,
+    task_id uuid not null,
     student_id uuid not null,
     subject_id uuid not null,
     teacher_id uuid not null,

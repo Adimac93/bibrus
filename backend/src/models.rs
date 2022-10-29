@@ -23,16 +23,16 @@ pub struct NewClassStudent {
 #[derive(Queryable)]
 pub struct Class {
     pub id: Uuid,
-    pub subject_id: Option<Uuid>,
-    pub group_id: Option<Uuid>,
+    pub subject_id: Uuid,
+    pub group_id: Uuid,
     pub teacher_id: Uuid,
 }
 
 #[derive(Insertable)]
 #[diesel(table_name = classes)]
 pub struct NewClass {
-    pub subject_id: Option<Uuid>,
-    pub group_id: Option<Uuid>,
+    pub subject_id: Uuid,
+    pub group_id: Uuid,
     pub teacher_id: Uuid,
 }
 
