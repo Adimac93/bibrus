@@ -8,20 +8,21 @@ use axum::{
 };
 use axum_extra::extract::{cookie::Cookie, CookieJar};
 use backend::{
+    administration,
     auth::{
         create_session, login_user, try_change_pass, try_create_new_user, try_get_session,
         AuthError,
     },
-    database::{get_connection_pool, PgPool}, administration,
+    database::{get_connection_pool, PgPool},
 };
 use dotenv::dotenv;
 use serde::{Deserialize, Serialize};
 use std::{net::SocketAddr, str::FromStr};
+use time::Date;
 use time::Duration;
 use tower_http::trace::TraceLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use uuid::Uuid;
-use time::Date;
 
 #[tokio::main]
 async fn main() {
@@ -66,7 +67,6 @@ pub fn app() -> Router {
         .nest("/api/admin", admin_routes)
         .layer(Extension(get_connection_pool()))
         .layer(TraceLayer::new_for_http())
-
 }
 
 async fn handler() -> Html<&'static str> {
@@ -150,16 +150,19 @@ async fn auth_middleware<B>(
 ) -> Result<Html<&'static str>, StatusCode> {
     let option_pool = req.extensions().get::<PgPool>();
 
-    let pool;
-    match option_pool {
-        Some(x) => pool = x,
+    let pool = match option_pool {
+        Some(x) => x,
         None => return Err(StatusCode::INTERNAL_SERVER_ERROR),
     };
 
     let cookie_header = req.headers().get("cookie");
     let session_cookie = match cookie_header {
-        Some(header) => Cookie::parse(header.to_str().map_err(|_e| StatusCode::INTERNAL_SERVER_ERROR)?)
-            .map_err(|_e| StatusCode::INTERNAL_SERVER_ERROR)?,
+        Some(header) => Cookie::parse(
+            header
+                .to_str()
+                .map_err(|_e| StatusCode::INTERNAL_SERVER_ERROR)?,
+        )
+        .map_err(|_e| StatusCode::INTERNAL_SERVER_ERROR)?,
         None => {
             println!("Invalid session");
             return Err(StatusCode::UNAUTHORIZED);
@@ -201,7 +204,8 @@ async fn post_create_school(
         &mut conn,
         &payload.name,
         &payload.place,
-        payload.school_type.as_deref());
+        payload.school_type.as_deref(),
+    );
 
     match school {
         Ok(_) => Ok(Html("School created")),
@@ -232,7 +236,8 @@ async fn post_create_student(
         payload.date_of_birth,
         payload.school_id,
         payload.group_id,
-        payload.user_id);
+        payload.user_id,
+    );
 
     match student {
         Ok(_) => Ok(Html("Student created")),
@@ -259,7 +264,8 @@ async fn post_create_teacher(
         &payload.first_name,
         &payload.last_name,
         payload.user_id,
-        payload.school_id,);
+        payload.school_id,
+    );
 
     match teacher {
         Ok(_) => Ok(Html("Teacher created")),
@@ -279,10 +285,7 @@ async fn post_create_subject(
 ) -> Result<Html<&'static str>, StatusCode> {
     let mut conn = pool.get().map_err(|_e| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    let subject = administration::create_subject(
-        &mut conn,
-        &payload.name,
-        payload.school_id,);
+    let subject = administration::create_subject(&mut conn, &payload.name, payload.school_id);
 
     match subject {
         Ok(_) => Ok(Html("Subject created")),
@@ -302,10 +305,7 @@ async fn post_create_group(
 ) -> Result<Html<&'static str>, StatusCode> {
     let mut conn = pool.get().map_err(|_e| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    let group = administration::create_group(
-        &mut conn,
-        &payload.name,
-        payload.school_id,);
+    let group = administration::create_group(&mut conn, &payload.name, payload.school_id);
 
     match group {
         Ok(_) => Ok(Html("Group created")),
@@ -330,7 +330,8 @@ async fn post_create_class(
         &mut conn,
         payload.subject_id,
         payload.group_id,
-        payload.teacher_id);
+        payload.teacher_id,
+    );
 
     match class {
         Ok(_) => Ok(Html("Class created")),
@@ -350,10 +351,8 @@ async fn post_create_class_student(
 ) -> Result<Html<&'static str>, StatusCode> {
     let mut conn = pool.get().map_err(|_e| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    let class_student = administration::add_student_to_class(
-        &mut conn,
-        payload.student_id,
-        payload.class_id);
+    let class_student =
+        administration::add_student_to_class(&mut conn, payload.student_id, payload.class_id);
 
     match class_student {
         Ok(_) => Ok(Html("Added student to class")),
@@ -384,7 +383,8 @@ async fn post_create_grade(
         payload.teacher_id,
         payload.student_id,
         payload.subject_id,
-        payload.task_id);
+        payload.task_id,
+    );
 
     match grade {
         Ok(_) => Ok(Html("Grade created")),
