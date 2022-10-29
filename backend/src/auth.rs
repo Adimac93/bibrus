@@ -60,6 +60,7 @@ pub fn try_create_new_user(
     new_password: &str,
 ) -> Result<(), AuthError> {
     println!("Trying to create new user");
+
     if get_by_login(conn, new_login)?.is_some() {
         println!("User with this name already exists");
         return Err(AuthError::UserAlreadyExists);

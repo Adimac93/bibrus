@@ -16,8 +16,8 @@ rust-argon2 = "1.0.0"
 rand = "0.8.5"
 serde = { version = "1.0.145", features = ["derive"] }
 tower-http = { version = "0.2.0", features = ["add-extension", "trace"] }
-time = { version = "0.3.15"}
-uuid = { version = "1.1.2", features = ["v4"] }
+time = { version = "0.3.15", features = ["serde"] }
+uuid = { version = "1.1.2", features = ["v4", "serde"] }
 zxcvbn = "2.2.1"
 dotenv = "0.15.0"
 anyhow = "1.0.65"

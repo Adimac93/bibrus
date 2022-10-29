@@ -168,6 +168,7 @@ pub struct NewTeacher<'a> {
 }
 
 #[derive(Queryable, Debug, PartialEq, Eq)]
+#[diesel(table_name = users)]
 pub struct User {
     pub id: Uuid,
     pub login: String,
