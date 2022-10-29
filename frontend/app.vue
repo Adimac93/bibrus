@@ -1,6 +1,8 @@
 <template>
     <div>
-        {{ data }} {{ error }}
+        <NuxtLayout>
+            <NuxtPage/>
+        </NuxtLayout>
     </div>
 </template>
 
