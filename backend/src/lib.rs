@@ -13,7 +13,6 @@ use axum::{
     Extension, Router,
 };
 use dotenv::dotenv;
-use std::net::{SocketAddr, TcpListener};
 use tower_http::trace::TraceLayer;
 
 pub fn app() -> Router {
