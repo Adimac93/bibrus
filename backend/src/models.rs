@@ -167,7 +167,7 @@ pub struct NewTeacher<'a> {
     pub school_id: Uuid,
 }
 
-#[derive(Queryable, Debug, PartialEq, Eq)]
+#[derive(Queryable, Debug, PartialEq, Eq, Clone)]
 pub struct User {
     pub id: Uuid,
     pub login: String,

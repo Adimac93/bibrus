@@ -4,13 +4,14 @@ use crate::{
         AuthError,
     },
     database::PgPool,
+    models::User,
 };
 use axum::{
     extract,
-    http::{Request, StatusCode},
+    http::{self, Request, StatusCode},
     middleware::Next,
-    response::Html,
-    routing::post,
+    response::{Html, Response},
+    routing::{get, post},
     Extension, Router,
 };
 use axum_extra::extract::{cookie::Cookie, CookieJar};
@@ -24,6 +25,11 @@ pub fn router() -> Router {
         .route("/register", post(post_register_user))
         .route("/login", post(post_login_user))
         .route("/change-pass", post(post_change_pass))
+        .merge(
+            Router::new()
+                .route("/greet", get(greet))
+                .route_layer(axum::middleware::from_fn(middleware)),
+        )
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -96,45 +102,32 @@ async fn post_login_user(
     }
 }
 
-pub async fn middleware<B>(
-    req: Request<B>,
-    _res: Next<B>,
-) -> Result<Html<&'static str>, StatusCode> {
-    let option_pool = req.extensions().get::<PgPool>();
+pub async fn middleware<B>(mut req: Request<B>, next: Next<B>) -> Result<Response, StatusCode> {
+    let pool = req
+        .extensions()
+        .get::<PgPool>()
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    let pool = match option_pool {
-        Some(x) => x,
-        None => return Err(StatusCode::INTERNAL_SERVER_ERROR),
-    };
+    let cookie_header = req
+        .headers()
+        .get(http::header::COOKIE)
+        .ok_or(StatusCode::UNAUTHORIZED)?;
+    let cookie = Cookie::parse(
+        cookie_header
+            .to_str()
+            .map_err(|_| StatusCode::UNAUTHORIZED)?,
+    )
+    .map_err(|_| StatusCode::UNAUTHORIZED)?;
 
-    let cookie_header = req.headers().get("cookie");
-    let session_cookie = match cookie_header {
-        Some(header) => Cookie::parse(
-            header
-                .to_str()
-                .map_err(|_e| StatusCode::INTERNAL_SERVER_ERROR)?,
-        )
-        .map_err(|_e| StatusCode::INTERNAL_SERVER_ERROR)?,
-        None => {
-            println!("Invalid session");
-            return Err(StatusCode::UNAUTHORIZED);
-        }
-    };
+    let session_id = Uuid::from_str(cookie.value()).map_err(|_| StatusCode::UNAUTHORIZED)?;
 
-    let session_id = Uuid::from_str(session_cookie.value());
-    match session_id {
-        Ok(id) => {
-            let mut conn = pool.get().map_err(|_e| StatusCode::INTERNAL_SERVER_ERROR)?;
-            match try_get_session(&mut conn, id) {
-                Ok(user) => {
-                    println!("{user:#?}");
-                    Ok(Html("<h1>Session ok</h1>"))
-                }
-                // session expired
-                Err(_e) => Err(StatusCode::GONE),
-            }
-        }
-        // invalid uuid
-        Err(_e) => Err(StatusCode::UNAUTHORIZED),
-    }
+    let mut conn = pool.get().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let user = try_get_session(&mut conn, session_id).map_err(|_| StatusCode::UNAUTHORIZED)?;
+
+    req.extensions_mut().insert(user);
+    Ok(next.run(req).await)
+}
+
+async fn greet(Extension(current_user): Extension<User>) -> Html<String> {
+    Html(format!("Hello {}", current_user.login))
 }
