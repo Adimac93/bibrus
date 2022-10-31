@@ -11,7 +11,7 @@ pub fn get_connection_pool() -> PgPool {
     let manager = ConnectionManager::<PgConnection>::new(url);
     Pool::builder()
         .test_on_check_out(true)
-        .max_size(10)
+        .max_size(5)
         .build(manager)
         .expect("Could not build connection pool")
 }
