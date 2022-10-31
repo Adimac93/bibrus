@@ -1,2 +1,2 @@
-DROP TABLE sessions cascade;
-DROP TABLE users cascade;
+drop table sessions cascade;
+drop table users cascade;
